@@ -215,3 +215,6 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 .idea
+
+infra/.terraform.lock.hcl
+infra/.terraform
