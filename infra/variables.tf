@@ -5,7 +5,7 @@ variable "aws_region" {
 
 variable "function_name" {
   type    = string
-  default = "my-python-lambda"
+  default = "lambda-clash-of-clans"
 }
 
 variable "runtime" {
