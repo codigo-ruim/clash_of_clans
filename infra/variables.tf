@@ -10,7 +10,7 @@ variable "function_name" {
 
 variable "runtime" {
   type    = string
-  default = "python3.14"
+  default = "python3.13"
 }
 
 variable "handler" {
