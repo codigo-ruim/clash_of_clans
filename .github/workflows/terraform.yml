@@ -1,8 +1,12 @@
 name: Terraform Deploy
 
+env:
+  TF_VAR_destroy: "true"
+
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 permissions:
   id-token: write
@@ -50,3 +54,27 @@ jobs:
 
       - name: Terraform Apply
         run: terraform apply -auto-approve
+
+  terraform-destroy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./infra
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::198502161589:role/DeployGitHiub
+          aws-region: us-east-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Destroy
+        run: terraform destroy -auto-approve

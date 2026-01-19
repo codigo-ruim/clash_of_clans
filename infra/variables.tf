@@ -17,3 +17,9 @@ variable "handler" {
   type    = string
   default = "lambda_function.lambda_handler"
 }
+
+variable "destroy" {
+  type        = bool
+  default     = false
+  description = "When true, CI will mark destroy intent (optional; use with care)."
+}
