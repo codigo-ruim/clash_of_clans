@@ -1,21 +1,27 @@
-# File: `/.github/workflows/terraform.yml` (apply - runs on push and can be triggered manually)
-name: Terraform Apply
+# File: `/.github/workflows/terraform-destroy.yml` (destroy - manual only, requires explicit confirmation)
+name: Terraform Destroy
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "yes" to confirm destroy'
+        required: true
+        default: 'yes'
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  terraform:
+  terraform-destroy:
+    if: ${{ github.event.inputs.confirm == 'yes' }}
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ./infra
+    env:
+      TF_VAR_destroy: "true"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,5 +38,5 @@ jobs:
       - name: Terraform Init
         run: terraform init
 
-      - name: Terraform Apply
-        run: terraform apply -auto-approve
+      - name: Terraform Destroy
+        run: terraform destroy -auto-approve
