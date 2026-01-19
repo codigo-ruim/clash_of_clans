@@ -20,8 +20,6 @@ jobs:
     defaults:
       run:
         working-directory: ./infra
-    env:
-      TF_VAR_destroy: "true"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,7 +34,72 @@ jobs:
         uses: hashicorp/setup-terraform@v2
 
       - name: Terraform Init
-        run: terraform init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_BACKEND_BUCKET }}" \
+            -backend-config="key=${{ secrets.TF_BACKEND_KEY }}" \
+            -backend-config="region=${{ secrets.TF_BACKEND_REGION }}" \
+            -backend-config="dynamodb_table=${{ secrets.TF_BACKEND_DDB_TABLE }}"
+
+      - name: Verify backend and state, import missing resources if necessary
+        env:
+          FUNCTION_NAME: lambda-clash-of-clans
+        run: |
+          set -euo pipefail
+          echo "Checking Terraform state"
+          state_count=$(terraform state list 2>/dev/null | wc -l || true)
+          echo "State has $state_count resources"
+
+          if [ "$state_count" -eq 0 ]; then
+            echo "State is empty — checking AWS for existing Lambda function: $FUNCTION_NAME"
+            if aws lambda get-function --function-name "$FUNCTION_NAME" >/dev/null 2>&1; then
+              echo "Lambda exists in AWS but not in state — attempting to import"
+
+              # Import Lambda function
+              if terraform import aws_lambda_function.function "$FUNCTION_NAME"; then
+                echo "Imported aws_lambda_function.function"
+              else
+                echo "FAILED to import aws_lambda_function.function — this likely indicates a backend mismatch or missing permissions. Aborting." >&2
+                terraform state list || true
+                exit 1
+              fi
+
+              # Attempt to import IAM role if present
+              ROLE_NAME="${FUNCTION_NAME}-iam-role"
+              ROLE_ARN=$(aws iam get-role --role-name "$ROLE_NAME" --query 'Role.Arn' --output text 2>/dev/null || true)
+              if [ -n "$ROLE_ARN" ]; then
+                if terraform import aws_iam_role.lambda_role "$ROLE_ARN"; then
+                  echo "Imported aws_iam_role.lambda_role"
+                else
+                  echo "Warning: failed to import aws_iam_role.lambda_role (continuing)." >&2
+                fi
+
+                # Try to import role policy attachment if we can discover the policy ARN in the terraform config
+                POLICY_ARN=$(grep -oE 'arn:aws:iam::[0-9]+:policy/[A-Za-z0-9_-]+' iam.tf | head -n1 || true)
+                if [ -n "$POLICY_ARN" ]; then
+                  ATTACH_ID="${ROLE_NAME}/${POLICY_ARN}"
+                  if terraform import aws_iam_role_policy_attachment.lambda_basic "$ATTACH_ID"; then
+                    echo "Imported aws_iam_role_policy_attachment.lambda_basic"
+                  else
+                    echo "Warning: failed to import aws_iam_role_policy_attachment.lambda_basic (continuing)." >&2
+                  fi
+                fi
+              else
+                echo "IAM role $ROLE_NAME not found in account (or access denied). Skipping role import."
+              fi
+
+            else
+              echo "Lambda $FUNCTION_NAME not found in AWS — proceeding with destroy (state empty)."
+            fi
+          else
+            echo "Terraform state contains resources; proceeding with plan/destroy."
+          fi
+
+      - name: Terraform Plan (destroy preview)
+        run: |
+          terraform plan -destroy -out=destroy.plan || true
+          terraform show -no-color destroy.plan || true
 
       - name: Terraform Destroy
+        if: always()
         run: terraform destroy -auto-approve
