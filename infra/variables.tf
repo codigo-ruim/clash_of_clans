@@ -23,3 +23,9 @@ variable "destroy" {
   default     = false
   description = "When true, CI will mark destroy intent (optional; use with care)."
 }
+
+variable "package_file" {
+  type        = string
+  default     = "deployment/package.zip"
+  description = "Path (relative to the Terraform working directory) to the Lambda deployment package zip. Can be set via TF_VAR_package_file by CI."
+}

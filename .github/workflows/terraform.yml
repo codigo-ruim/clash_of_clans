@@ -34,8 +34,12 @@ jobs:
           # Copy source files into staging
           cp ../lambda_function.py build/ || true
           cp -r ../src build/ || true
-          # Create zip in ../deployment so the output file is outside the staging dir (prevents including the zip into itself)
-          (cd build && zip -r9 ../deployment/package.zip .)
+          # Create a versioned zip using the GitHub run ID
+          PACKAGE_NAME="package-${{ github.run_id }}.zip"
+          (cd build && zip -r9 "../deployment/${PACKAGE_NAME}" .)
+          echo "Created deployment/${PACKAGE_NAME}"
+          # Export TF_VAR so Terraform knows which file to read
+          echo "TF_VAR_package_file=deployment/${PACKAGE_NAME}" >> $GITHUB_ENV
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v2
